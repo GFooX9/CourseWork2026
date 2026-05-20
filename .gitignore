@@ -4,7 +4,6 @@
 # Папки сборки PyInstaller (теперь Git будет их пропускать)
 Build/
 dist/
-*.spec
 
 # Кэш компиляции Python (тот самый pycache)
 **/__pycache__/
