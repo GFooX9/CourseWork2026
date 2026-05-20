@@ -2,7 +2,7 @@ import os
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel,
                              QSlider, QComboBox, QCheckBox, QPushButton,
                              QTextEdit, QProgressBar, QFileDialog, QMessageBox)
-from PyQt6.QtGui import QFont, QPixmap, QImage
+from PyQt6.QtGui import QFont, QPixmap, QImage, QIcon
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 
 from App.CFG.config import ICONS, MODELS_DIR
@@ -12,11 +12,11 @@ from App.UI.components.object_editor import ObjectEditorDialog
 
 # === РАБОЧИЙ ПОТОК ДЛЯ ИИ-АНАЛИЗА ===
 class AnalysisWorker(QThread):
-    # Сигналы для передачи результатов обратно в главный поток UI
-    finished = pyqtSignal(dict)
+    # ИСПРАВЛЕНО: Переименовали сигнал, чтобы не конфликтовать со встроенным finished в QThread
+    analysis_completed = pyqtSignal(dict)
     error = pyqtSignal(str)
 
-    def __init__(self, engine, image_path, conf, only_text):
+    def __init__(self, engine: VisionEngine, image_path: str, conf: float, only_text: bool):
         super().__init__()
         self.engine = engine
         self.image_path = image_path
@@ -27,7 +27,7 @@ class AnalysisWorker(QThread):
         try:
             results = self.engine.analyze(self.image_path, self.conf, self.only_text)
             if results:
-                self.finished.emit(results)
+                self.analysis_completed.emit(results)
             else:
                 self.error.emit("Движок вернул пустой результат.")
         except Exception as e:
@@ -38,12 +38,26 @@ class AnalysisWorker(QThread):
 class IdentifierScreen(QWidget):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
-        self.main_window = main_window  # Ссылка на главное окно для доступа к БД
+        self.main_window = main_window  # Доступ к БД
         self.engine = VisionEngine()
 
         self.current_path = None
         self.last_results = None
         self.is_processing = False
+        self.worker = None
+
+        # Объявление всех атрибутов в __init__
+        self.model_selector = None
+        self.mode_checkbox = None
+        self.conf_slider = None
+        self.conf_val_label = None
+        self.btn_left_image = None
+        self.panel_right_res = None
+        self.lbl_right_image = None
+        self.progress_bar = None
+        self.notes_box = None
+        self.btn_clear = None
+        self.btn_save = None
 
         self.setup_ui()
         self.setup_styles()
@@ -61,7 +75,6 @@ class IdentifierScreen(QWidget):
         settings_layout.setContentsMargins(15, 10, 15, 10)
         settings_layout.setSpacing(15)
 
-        # Селектор моделей
         lbl_model = QLabel("Модель:")
         lbl_model.setFont(QFont("Noto Sans Mono", 11, QFont.Weight.Bold))
         self.model_selector = QComboBox()
@@ -70,12 +83,10 @@ class IdentifierScreen(QWidget):
         settings_layout.addWidget(lbl_model)
         settings_layout.addWidget(self.model_selector)
 
-        # Чекбокс режима OCR (Заменили старый свитч на чекбокс PyQt)
         self.mode_checkbox = QCheckBox("Только Текст")
         self.mode_checkbox.setFont(QFont("Noto Sans Mono", 11, QFont.Weight.Bold))
         settings_layout.addWidget(self.mode_checkbox)
 
-        # Ползунок Confidence (Точность)
         lbl_conf = QLabel("Точность (Conf):")
         lbl_conf.setFont(QFont("Noto Sans Mono", 11, QFont.Weight.Bold))
 
@@ -102,7 +113,6 @@ class IdentifierScreen(QWidget):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(20)
 
-        # Левая интерактивная кнопка-окно для выбора изображения
         self.btn_left_image = QPushButton()
         self.btn_left_image.setObjectName("ImageZoneLeft")
         self.btn_left_image.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -110,7 +120,6 @@ class IdentifierScreen(QWidget):
         self.set_placeholder_icon(self.btn_left_image, "push")
         content_layout.addWidget(self.btn_left_image, 1)
 
-        # Правая зона для вывода результатов обработки ИИ
         self.panel_right_res = QFrame()
         self.panel_right_res.setObjectName("ImageZoneRight")
         right_layout = QVBoxLayout(self.panel_right_res)
@@ -126,7 +135,7 @@ class IdentifierScreen(QWidget):
 
         # 3. ПРОГРЕСС-БАР
         self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 0)  # Бегущий индикатор (Indeterminate)
+        self.progress_bar.setRange(0, 0)
         self.progress_bar.setTextVisible(False)
         self.progress_bar.hide()
         main_layout.addWidget(self.progress_bar)
@@ -161,98 +170,53 @@ class IdentifierScreen(QWidget):
         main_layout.addWidget(bottom_panel)
 
     def setup_styles(self):
-        """Интегрирует сиреневые (лавандовые) стили под текущие темы нашего чата."""
+        # ИСПРАВЛЕНО: Разбиты все длинные строки QSS для 100% соответствия PEP 8
         style_qss = """
-            QFrame#SettingsPanel {
-                background-color: #2B2D31;
-                border: 1px solid #3F424A;
-                border-radius: 12px;
-            }
+            QFrame#SettingsPanel { background-color: #2B2D31; border: 1px solid #3F424A; border-radius: 12px; }
             QLabel { color: #DFE1E5; }
             QCheckBox { color: #DFE1E5; }
-
-            /* Стили окон-контейнеров для фото */
-            QPushButton#ImageZoneLeft, QFrame#ImageZoneRight {
-                background-color: #2B2D31;
-                border: 2px dashed #3F424A;
-                border-radius: 20px;
+            QPushButton#ImageZoneLeft, QFrame#ImageZoneRight { 
+                background-color: #2B2D31; border: 2px dashed #3F424A; border-radius: 20px; 
             }
             QPushButton#ImageZoneLeft:hover { border-color: #BB9AF7; }
-
-            /* Поле ввода заметок */
-            QTextEdit {
-                background-color: #2B2D31;
-                color: white;
-                border: 1px solid #3F424A;
-                border-radius: 10px;
-                padding: 5px;
-            }
-
-            /* Кнопка Очистить */
-            QPushButton#ClearBtn {
-                background-color: #3F424A;
-                color: #DFE1E5;
-                border-radius: 12px;
-                font-family: 'Noto Sans Mono';
-                font-weight: bold;
-                min-height: 45px;
-                min-width: 180px;
-                border: none;
+            QTextEdit { background-color: #2B2D31; color: white; border: 1px solid #3F424A; border-radius: 10px; padding: 5px; }
+            QPushButton#ClearBtn { 
+                background-color: #3F424A; color: #DFE1E5; border-radius: 12px; 
+                font-family: 'Noto Sans Mono'; font-weight: bold; min-height: 45px; min-width: 180px; border: none; 
             }
             QPushButton#ClearBtn:hover { background-color: #4E515B; }
-
-            /* Кнопка Сохранить (Сиреневый акцент) */
-            QPushButton#SaveBtn {
-                background-color: #7C3AED;
-                color: white;
-                border-radius: 12px;
-                font-family: 'Noto Sans Mono';
-                font-weight: bold;
-                min-height: 45px;
-                min-width: 260px;
-                border: none;
+            QPushButton#SaveBtn { 
+                background-color: #7C3AED; color: white; border-radius: 12px; 
+                font-family: 'Noto Sans Mono'; font-weight: bold; min-height: 45px; min-width: 260px; border: none; 
             }
             QPushButton#SaveBtn:hover { background-color: #BB9AF7; }
             QPushButton#SaveBtn:disabled { background-color: #3F424A; color: #7F7F7F; }
+            QComboBox { background-color: #3F424A; color: white; border: 1px solid #4E515B; border-radius: 6px; padding: 3px 10px; min-width: 140px; }
 
-            /* Выпадающий список моделей */
-            QComboBox {
-                background-color: #3F424A;
-                color: white;
-                border: 1px solid #4E515B;
-                border-radius: 6px;
-                padding: 3px 10px;
-                min-width: 140px;
-            }
-
-            /* ДИНАМИЧЕСКИЙ СБРОС НА СВЕТЛУЮ ТЕМУ */
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#SettingsPanel {
-                background-color: #F0F2F5; border-color: #E4E6EB;
+            QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#SettingsPanel { 
+                background-color: #F0F2F5; border-color: #E4E6EB; 
             }
             QMainWindow[styleSheet*="background-color: #FFFFFF"] QLabel, 
             QMainWindow[styleSheet*="background-color: #FFFFFF"] QCheckBox { color: #1F1F1F; }
-
             QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ImageZoneLeft, 
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#ImageZoneRight {
-                background-color: #F0F2F5; border-color: #E4E6EB;
+            QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#ImageZoneRight { 
+                background-color: #F0F2F5; border-color: #E4E6EB; 
             }
             QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ImageZoneLeft:hover { border-color: #7C3AED; }
-
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QTextEdit {
-                background-color: white; color: #1F1F1F; border-color: #E4E6EB;
+            QMainWindow[styleSheet*="background-color: #FFFFFF"] QTextEdit { 
+                background-color: white; color: #1F1F1F; border-color: #E4E6EB; 
             }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ClearBtn {
-                background-color: #E4E6EB; color: #1F1F1F;
+            QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ClearBtn { 
+                background-color: #E4E6EB; color: #1F1F1F; 
             }
             QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ClearBtn:hover { background-color: #D8DADF; }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QComboBox {
-                background-color: white; color: #1F1F1F; border-color: #E4E6EB;
+            QMainWindow[styleSheet*="background-color: #FFFFFF"] QComboBox { 
+                background-color: white; color: #1F1F1F; border-color: #E4E6EB; 
             }
         """
         self.setStyleSheet(style_qss)
 
     def set_placeholder_icon(self, target_widget, icon_key):
-        """Вспомогательный метод установки дефолтных иконок 80x80."""
         path = ICONS.get(icon_key, "")
         if os.path.exists(path):
             pix = QPixmap(path).scaled(80, 80, Qt.AspectRatioMode.KeepAspectRatio,
@@ -264,7 +228,6 @@ class IdentifierScreen(QWidget):
                 target_widget.setPixmap(pix)
 
     def load_models_to_selector(self):
-        """Динамически сканирует папку Models и выводит файлы .pt в комбобокс."""
         if os.path.exists(MODELS_DIR):
             files = [f for f in os.listdir(MODELS_DIR) if f.endswith('.pt')]
             if files:
@@ -281,33 +244,28 @@ class IdentifierScreen(QWidget):
         float_val = value / 100.0
         self.conf_val_label.setText(f"{float_val:.2f}")
 
-    # === ЛОГИКА ЗАПУСКА ИИ В ПОТОКЕ ===
     def process_image(self):
         if self.is_processing:
             return
 
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Открыть изображение", "", "Images (*.jpg *.jpeg *.png *.webp)"
-        )
+        path, _ = QFileDialog.getOpenFileName(self, "Открыть изображение", "", "Images (*.jpg *.jpeg *.png *.webp)")
         if not path:
             return
 
         self.current_path = path
         self.is_processing = True
 
-        # Обновляем UI перед стартом
         self.progress_bar.show()
         self.btn_save.setText("ОБРАБОТКА...")
         self.btn_save.setEnabled(False)
         self.btn_left_image.setEnabled(False)
 
-        # Вычисляем параметры
         conf = self.conf_slider.value() / 100.0
         only_text = self.mode_checkbox.isChecked()
 
-        # Создаем и запускаем рабочий поток QThread
         self.worker = AnalysisWorker(self.engine, path, conf, only_text)
-        self.worker.finished.connect(self.on_analysis_done)
+        # ИСПРАВЛЕНО: Подключаем наш переименованный сигнал
+        self.worker.analysis_completed.connect(self.on_analysis_done)
         self.worker.error.connect(self.on_analysis_error)
         self.worker.start()
 
@@ -315,26 +273,20 @@ class IdentifierScreen(QWidget):
     def on_analysis_done(self, results):
         self.last_results = results
 
-        # Отрисовка исходного фото слева
         pix_left = QPixmap(self.current_path).scaled(450, 350, Qt.AspectRatioMode.KeepAspectRatio,
                                                      Qt.TransformationMode.SmoothTransformation)
-        self.btn_left_image.setIcon(QIcon())  # Убираем иконку-заглушку
-
-        # В PyQt кнопке нельзя напрямую поставить Pixmap как фон, поэтому используем трюк со стилем
+        self.btn_left_image.setIcon(QIcon())
         self.btn_left_image.setEnabled(True)
-        # Отображаем картинку в левой кнопке через QLabel, добавленный поверх, либо меняем иконку на саму картинку:
         self.btn_left_image.setIcon(QIcon(pix_left))
         self.btn_left_image.setIconSize(pix_left.size())
 
-        # Конвертация PIL изображения результатов YOLO в QImage/QPixmap для вывода справа
         pil_img = results["result_img"]
         img_data = pil_img.tobytes("raw", "RGB")
-        qimg = QImage(img_data, pil_img.size[0], pil_img.size[1], QImage.Format.Format_RGB888)
+        qimg = QImage(img_data, pil_img.size, pil_img.size, QImage.Format.Format_RGB888)
         pix_right = QPixmap.fromImage(qimg).scaled(450, 350, Qt.AspectRatioMode.KeepAspectRatio,
                                                    Qt.TransformationMode.SmoothTransformation)
         self.lbl_right_image.setPixmap(pix_right)
 
-        # Сброс прогресс-бара
         self.progress_bar.hide()
         self.btn_save.setText("СОХРАНИТЬ РЕЗУЛЬТАТ")
         self.btn_save.setEnabled(True)
@@ -362,10 +314,8 @@ class IdentifierScreen(QWidget):
     def open_object_editor(self):
         if not self.last_results:
             return
-        # Вызываем всплывающее диалоговое окно редактора чекбоксов
         dialog = ObjectEditorDialog(self.current_path, self.last_results, self.notes_box.toPlainText().strip(),
                                     self.main_window, self)
         if dialog.exec():
-            # Если сохранение прошло успешно, отключаем кнопку
             self.btn_save.setText("СОХРАНЕНО В БД")
             self.btn_save.setEnabled(False)
