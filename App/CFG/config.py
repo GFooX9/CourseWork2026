@@ -11,6 +11,8 @@ def resource_path(relative_path):
 
 # --- ПУТИ К КОРНЕВЫМ ДИРЕКТОРИЯМ ---
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+MODELS_DIR = resource_path("Source/Models")
+DEFAULT_MODEL_PATH = os.path.join(MODELS_DIR, "yolo11n.pt")
 
 # --- ПУТИ К РЕСУРСАМ (ИЗ ПАПКИ SOURCE) ---
 FONT_PATH = resource_path("Source/Noto_Sans_Mono/static/NotoSansMono-Regular.ttf")

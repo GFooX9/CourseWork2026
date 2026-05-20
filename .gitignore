@@ -11,3 +11,7 @@ dist/
 
 # Настройки среды разработки PyCharm
 .idea/
+
+# Игнорируем тяжелые веса нейросетей
+Source/Models/*.pt
+Source/Models/*.onnx

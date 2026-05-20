@@ -1,6 +1,7 @@
 import sqlite3
 import os
-from datetime import datetime
+import pandas as pd
+from datetime import datetime, timedelta
 from App.CFG.config import DB_PATH
 
 class DatabaseManager:
@@ -31,7 +32,6 @@ class DatabaseManager:
         """Возвращает все записи из базы данных в виде списка словарей для вывода в таблицу PyQt6."""
         try:
             with sqlite3.connect(self.db_path) as conn:
-                # Позволяет читать строки как словари: row['protocol_num'] вместо row[1]
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 cursor.execute("SELECT * FROM history ORDER BY id DESC")
@@ -41,11 +41,51 @@ class DatabaseManager:
             print(f"[DatabaseManager Error] Ошибка загрузки истории: {e}")
             return []
 
+    def get_filtered_history(self, search_query: str = None, date_filter: str = "Все время") -> list:
+        """
+        Осуществляет поиск по номеру протокола и фильтрацию по датам.
+        Интегрировано из старого модуля SearchEngine.
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                query = "SELECT * FROM history WHERE 1=1"
+                params = []
+
+                # Поиск по частичному совпадению номера протокола
+                if search_query:
+                    query += " AND protocol_num LIKE ?"
+                    params.append(f"%{search_query}%")
+
+                # Если фильтр по дате не дефолтный, фильтруем выборку с помощью Pandas
+                if date_filter != "Все время":
+                    today = datetime.now().date()
+                    if date_filter == "Сегодня":
+                        start_date = today
+                    elif date_filter == "За неделю":
+                        start_date = today - timedelta(days=7)
+                    else:
+                        start_date = None
+
+                    if start_date:
+                        df = pd.read_sql_query(query, conn, params=params)
+                        # Парсим текстовую дату в объект даты для сравнения
+                        df['dt_obj'] = pd.to_datetime(df['date_str'], dayfirst=True).dt.date
+                        # Фильтруем, дропаем временную колонку и возвращаем список словарей
+                        filtered_df = df[df['dt_obj'] >= start_date].drop(columns=['dt_obj'])
+                        return filtered_df.to_dict('records')
+
+                # Если фильтрация по дате «Все время», выполняем обычный быстрый SQL-запрос
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(query, params)
+                return [dict(row) for row in cursor.fetchall()]
+
+        except Exception as e:
+            print(f"[DatabaseManager Error] Ошибка фильтрации истории: {e}")
+            return []
+
     def save_to_history(self, protocol_num, original_path, cached_img_path, objects_info, text_info, user_notes=""):
-        """
-        Записывает результаты нового исследования в базу данных.
-        Принимает 'cached_img_path' — путь к уже скопированной в ResultsImages картинке.
-        """
+        """Записывает результаты нового исследования в базу данных."""
         now_str = datetime.now().strftime("%d.%m.%Y %H:%M")
         original_name = os.path.basename(original_path)
 
@@ -64,7 +104,6 @@ class DatabaseManager:
                 ))
                 conn.commit()
 
-            # Возвращаем словарь данных, чтобы интерфейс мгновенно обновил таблицу без тяжелого перезапроса БД
             return {
                 "protocol_num": protocol_num,
                 "date_str": now_str,
