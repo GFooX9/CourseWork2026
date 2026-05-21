@@ -1,9 +1,10 @@
 import os
+from App.CFG.config import ICONS
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QScrollArea,
-                             QWidget, QLabel, QPushButton, QFileDialog, QMessageBox)
-from PyQt6.QtGui import QFont, QPixmap, QImage
+                             QWidget, QLabel, QPushButton, QFileDialog,
+                             QMessageBox)
+from PyQt6.QtGui import QFont, QPixmap, QImage, QIcon
 from PyQt6.QtCore import Qt
-
 from App.ReportMaster.report_generator import ReportGenerator
 
 
@@ -14,7 +15,6 @@ class ProtocolDialog(QDialog):
         self.main_window = main_window  # Доступ к менеджеру БД
         self.history_screen = history_screen  # Доступ к экрану истории для обновления списка
         self.reporter = ReportGenerator()
-
         self.setup_ui()
         self.setup_styles()
 
@@ -22,6 +22,10 @@ class ProtocolDialog(QDialog):
         # Настройка всплывающего окна
         self.setWindowTitle(f"Протокол № {self.data.get('protocol_num', '---')}")
         self.setGeometry(150, 150, 1100, 820)
+
+        # ПРАВКА 1: Установка фирменной иконки приложения в заголовок окна протокола
+        if "main_icon" in ICONS and os.path.exists(ICONS["main_icon"]):
+            self.setWindowIcon(QIcon(ICONS["main_icon"]))
 
         # Основной вертикальный слой диалога
         dialog_layout = QVBoxLayout(self)
@@ -56,15 +60,14 @@ class ProtocolDialog(QDialog):
         img_path = self.data.get('result_file_path', '')
         self.img_label = QLabel()
         self.img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
         if img_path and os.path.exists(img_path):
-            pix = QPixmap(img_path).scaled(480, 360, Qt.AspectRatioMode.KeepAspectRatio,
+            pix = QPixmap(img_path).scaled(480, 360,
+                                           Qt.AspectRatioMode.KeepAspectRatio,
                                            Qt.TransformationMode.SmoothTransformation)
             self.img_label.setPixmap(pix)
         else:
             self.img_label.setText("Файл изображения не найден в локальном хранилище ResultsImages")
             self.img_label.setStyleSheet("color: #FF4C4C; font-weight: bold;")
-
         content_layout.addWidget(self.img_label)
 
         # Блок "Заметки эксперта"
@@ -111,6 +114,7 @@ class ProtocolDialog(QDialog):
         self.btn_delete = QPushButton("УДАЛИТЬ ПРОТОКОЛ")
         self.btn_delete.setObjectName("DeleteBtn")
         self.btn_delete.clicked.connect(self.delete_protocol)
+        self.btn_delete.setCursor(Qt.CursorShape.PointingHandCursor)
         bottom_layout.addWidget(self.btn_delete)
 
         bottom_layout.addStretch()
@@ -118,56 +122,89 @@ class ProtocolDialog(QDialog):
         self.btn_export = QPushButton("ЭКСПОРТ В PDF")
         self.btn_export.setObjectName("ExportBtn")
         self.btn_export.clicked.connect(self.export_pdf)
+        self.btn_export.setCursor(Qt.CursorShape.PointingHandCursor)
         bottom_layout.addWidget(self.btn_export)
 
         dialog_layout.addWidget(bottom_box)
 
     def setup_styles(self):
         """Подключает лавандовую стилизацию, зависимую от выбранной темы в MainWindow."""
+        # ПРАВКА 2: Кастомный тонкий скроллбар в сиренево-серых тонах для ProtocolScroll
         style_qss = """
-            QDialog { background-color: #1E1F22; }
-            QLabel { color: #DFE1E5; }
+        QDialog { background-color: #1E1F22; }
+        QLabel { color: #DFE1E5; }
 
-            /* Стили скролл-бара и контента */
-            QScrollArea#ProtocolScroll {
-                background-color: #2B2D31;
-                border: 2px solid #3F424A;
-                border-radius: 20px;
-            }
-            QWidget#ScrollContent { background-color: transparent; }
+        /* Стили скролл-бара и контента */
+        QScrollArea#ProtocolScroll {
+            background-color: #2B2D31;
+            border: 2px solid #3F424A;
+            border-radius: 20px;
+        }
+        QWidget#ScrollContent { background-color: transparent; }
 
-            /* Кнопка Экспорта (Лавандовый акцент) */
-            QPushButton#ExportBtn {
-                background-color: #7C3AED;
-                color: white;
-                border-radius: 12px;
-                font-family: 'Noto Sans Mono';
-                font-weight: bold;
-                min-height: 45px;
-                min-width: 220px;
-                border: none;
-            }
-            QPushButton#ExportBtn:hover { background-color: #BB9AF7; }
+        /* Модернизация вертикального скроллбара */
+        QScrollArea#ProtocolScroll QScrollBar:vertical {
+            border: none;
+            background-color: #2B2D31; /* Мягкий серый фон дорожки */
+            width: 12px;
+            margin: 5px;
+            border-radius: 6px;
+        }
+        QScrollArea#ProtocolScroll QScrollBar::handle:vertical {
+            background-color: #BB9AF7; /* Мягкий сиреневый бегунок */
+            min-height: 30px;
+            border-radius: 6px;
+        }
+        QScrollArea#ProtocolScroll QScrollBar::handle:vertical:hover {
+            background-color: #9D62FF;
+        }
+        QScrollArea#ProtocolScroll QScrollBar::sub-line:vertical, 
+        QScrollArea#ProtocolScroll QScrollBar::add-line:vertical {
+            border: none; background: none; height: 0px;
+        }
+        QScrollArea#ProtocolScroll QScrollBar::add-page:vertical, 
+        QScrollArea#ProtocolScroll QScrollBar::sub-page:vertical {
+            background: none;
+        }
 
-            /* Кнопка Удалить (Красный акцент) */
-            QPushButton#DeleteBtn {
-                background-color: #442326;
-                color: #F85149;
-                border-radius: 12px;
-                font-family: 'Noto Sans Mono';
-                font-weight: bold;
-                min-height: 45px;
-                min-width: 220px;
-                border: 1px solid #6E2E31;
-            }
-            QPushButton#DeleteBtn:hover { background-color: #DA3637; color: white; }
+        /* Кнопка Экспорта (Лавандовый акцент) */
+        QPushButton#ExportBtn {
+            background-color: #7C3AED;
+            color: white;
+            border-radius: 12px;
+            font-family: 'Noto Sans Mono';
+            font-weight: bold;
+            min-height: 45px;
+            min-width: 220px;
+            border: none;
+        }
+        QPushButton#ExportBtn:hover { background-color: #BB9AF7; }
 
-            /* ДИНАМИЧЕСКИЙ ПЕРЕКЛЮЧАТЕЛЬ СТИЛЕЙ НА СВЕТЛУЮ ТЕМУ ЧАТА */
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QDialog { background-color: #FFFFFF; }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QLabel { color: #1F1F1F; }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QScrollArea#ProtocolScroll {
-                background-color: #F0F2F5; border-color: #E4E6EB;
-            }
+        /* Кнопка Удалить (Красный акцент) */
+        QPushButton#DeleteBtn {
+            background-color: #442326;
+            color: #F85149;
+            border-radius: 12px;
+            font-family: 'Noto Sans Mono';
+            font-weight: bold;
+            min-height: 45px;
+            min-width: 220px;
+            border: 1px solid #6E2E31;
+        }
+        QPushButton#DeleteBtn:hover { background-color: #DA3637; color: white; }
+
+        /* ДИНАМИЧЕСКИЙ ПЕРЕКЛЮЧАТЕЛЬ СТИЛЕЙ НА СВЕТЛУЮ ТЕМУ ЧАТА */
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QDialog { background-color: #FFFFFF; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QLabel { color: #1F1F1F; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QScrollArea#ProtocolScroll {
+            background-color: #F0F2F5; border-color: #E4E6EB;
+        }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QScrollArea#ProtocolScroll QScrollBar:vertical {
+            background-color: #E4E6EB;
+        }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QScrollArea#ProtocolScroll QScrollBar::handle:vertical {
+            background-color: #7C3AED;
+        }
         """
         # Принудительно проверяем состояние темы главного окна, чтобы диалог открылся в нужном цвете
         if not self.main_window.is_dark_theme:
