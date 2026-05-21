@@ -2,7 +2,7 @@ import cv2
 from PIL import Image
 from App.Engine.object_detector import ObjectDetector
 from App.Engine.text_recognizer import TextRecognizer
-from App.CFG.config import DEFAULT_MODEL_PAT
+from App.CFG.config import DEFAULT_MODEL_PATH
 
 
 class VisionEngine:

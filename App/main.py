@@ -1,4 +1,5 @@
 import sys
+import torch
 from PyQt6.QtWidgets import QApplication
 from App.UI.main_window import MainWindow
 

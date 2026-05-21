@@ -1,10 +1,9 @@
 import os
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel,
                              QSlider, QComboBox, QCheckBox, QPushButton,
-                             QTextEdit, QProgressBar, QFileDialog, QMessageBox)
+                             QTextEdit, QProgressBar, QFileDialog, QMessageBox, QSizePolicy)
 from PyQt6.QtGui import QFont, QPixmap, QImage, QIcon
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
-
 from App.CFG.config import ICONS, MODELS_DIR
 from App.Engine.vision_engine import VisionEngine
 from App.UI.components.object_editor import ObjectEditorDialog
@@ -12,7 +11,6 @@ from App.UI.components.object_editor import ObjectEditorDialog
 
 # === РАБОЧИЙ ПОТОК ДЛЯ ИИ-АНАЛИЗА ===
 class AnalysisWorker(QThread):
-    # ИСПРАВЛЕНО: Переименовали сигнал, чтобы не конфликтовать со встроенным finished в QThread
     analysis_completed = pyqtSignal(dict)
     error = pyqtSignal(str)
 
@@ -40,7 +38,6 @@ class IdentifierScreen(QWidget):
         super().__init__(parent)
         self.main_window = main_window  # Доступ к БД
         self.engine = VisionEngine()
-
         self.current_path = None
         self.last_results = None
         self.is_processing = False
@@ -79,7 +76,6 @@ class IdentifierScreen(QWidget):
         lbl_model.setFont(QFont("Noto Sans Mono", 11, QFont.Weight.Bold))
         self.model_selector = QComboBox()
         self.model_selector.currentIndexChanged.connect(self.change_model)
-
         settings_layout.addWidget(lbl_model)
         settings_layout.addWidget(self.model_selector)
 
@@ -89,7 +85,6 @@ class IdentifierScreen(QWidget):
 
         lbl_conf = QLabel("Точность (Conf):")
         lbl_conf.setFont(QFont("Noto Sans Mono", 11, QFont.Weight.Bold))
-
         self.conf_slider = QSlider(Qt.Orientation.Horizontal)
         self.conf_slider.setMinimum(10)
         self.conf_slider.setMaximum(100)
@@ -104,7 +99,6 @@ class IdentifierScreen(QWidget):
         settings_layout.addWidget(lbl_conf)
         settings_layout.addWidget(self.conf_slider)
         settings_layout.addWidget(self.conf_val_label)
-
         main_layout.addWidget(settings_panel)
 
         # 2. ЦЕНТРАЛЬНЫЙ БЛОК (ЛЕВАЯ И ПРАВАЯ ЗОНЫ)
@@ -113,15 +107,21 @@ class IdentifierScreen(QWidget):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(20)
 
+        # ИСПРАВЛЕНО: Заданы жесткие минимальные размеры и политика растяжения, чтобы панель не плющилась
         self.btn_left_image = QPushButton()
         self.btn_left_image.setObjectName("ImageZoneLeft")
         self.btn_left_image.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_left_image.setMinimumSize(450, 350)
+        self.btn_left_image.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.btn_left_image.clicked.connect(self.process_image)
         self.set_placeholder_icon(self.btn_left_image, "push")
         content_layout.addWidget(self.btn_left_image, 1)
 
         self.panel_right_res = QFrame()
         self.panel_right_res.setObjectName("ImageZoneRight")
+        self.panel_right_res.setMinimumSize(450, 350)
+        self.panel_right_res.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
         right_layout = QVBoxLayout(self.panel_right_res)
         right_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -129,11 +129,11 @@ class IdentifierScreen(QWidget):
         self.lbl_right_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.set_placeholder_icon(self.lbl_right_image, "vision")
         right_layout.addWidget(self.lbl_right_image)
-
         content_layout.addWidget(self.panel_right_res, 1)
+
         main_layout.addWidget(content_box, 1)
 
-        # 3. ПРОГРЕСС-БАР
+        # 3. ПРОГРЕСС-БАР (ИСПРАВЛЕНЫ СТИЛИ И ВНЕШНИЙ ВИД ДАЛЬШЕ В МЕТОДЕ)
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)
         self.progress_bar.setTextVisible(False)
@@ -170,49 +170,50 @@ class IdentifierScreen(QWidget):
         main_layout.addWidget(bottom_panel)
 
     def setup_styles(self):
-        # ИСПРАВЛЕНО: Разбиты все длинные строки QSS для 100% соответствия PEP 8
         style_qss = """
-            QFrame#SettingsPanel { background-color: #2B2D31; border: 1px solid #3F424A; border-radius: 12px; }
-            QLabel { color: #DFE1E5; }
-            QCheckBox { color: #DFE1E5; }
-            QPushButton#ImageZoneLeft, QFrame#ImageZoneRight { 
-                background-color: #2B2D31; border: 2px dashed #3F424A; border-radius: 20px; 
-            }
-            QPushButton#ImageZoneLeft:hover { border-color: #BB9AF7; }
-            QTextEdit { background-color: #2B2D31; color: white; border: 1px solid #3F424A; border-radius: 10px; padding: 5px; }
-            QPushButton#ClearBtn { 
-                background-color: #3F424A; color: #DFE1E5; border-radius: 12px; 
-                font-family: 'Noto Sans Mono'; font-weight: bold; min-height: 45px; min-width: 180px; border: none; 
-            }
-            QPushButton#ClearBtn:hover { background-color: #4E515B; }
-            QPushButton#SaveBtn { 
-                background-color: #7C3AED; color: white; border-radius: 12px; 
-                font-family: 'Noto Sans Mono'; font-weight: bold; min-height: 45px; min-width: 260px; border: none; 
-            }
-            QPushButton#SaveBtn:hover { background-color: #BB9AF7; }
-            QPushButton#SaveBtn:disabled { background-color: #3F424A; color: #7F7F7F; }
-            QComboBox { background-color: #3F424A; color: white; border: 1px solid #4E515B; border-radius: 6px; padding: 3px 10px; min-width: 140px; }
+        QFrame#SettingsPanel { background-color: #2B2D31; border: 1px solid #3F424A; border-radius: 12px; }
+        QLabel { color: #DFE1E5; }
+        QCheckBox { color: #DFE1E5; }
+        QPushButton#ImageZoneLeft, QFrame#ImageZoneRight { 
+            background-color: #2B2D31; border: 2px dashed #3F424A; border-radius: 20px; 
+        }
+        QPushButton#ImageZoneLeft:hover { border-color: #BB9AF7; }
+        QTextEdit { background-color: #2B2D31; color: white; border: 1px solid #3F424A; border-radius: 10px; padding: 5px; }
 
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#SettingsPanel { 
-                background-color: #F0F2F5; border-color: #E4E6EB; 
-            }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QLabel, 
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QCheckBox { color: #1F1F1F; }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ImageZoneLeft, 
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#ImageZoneRight { 
-                background-color: #F0F2F5; border-color: #E4E6EB; 
-            }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ImageZoneLeft:hover { border-color: #7C3AED; }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QTextEdit { 
-                background-color: white; color: #1F1F1F; border-color: #E4E6EB; 
-            }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ClearBtn { 
-                background-color: #E4E6EB; color: #1F1F1F; 
-            }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ClearBtn:hover { background-color: #D8DADF; }
-            QMainWindow[styleSheet*="background-color: #FFFFFF"] QComboBox { 
-                background-color: white; color: #1F1F1F; border-color: #E4E6EB; 
-            }
+        /* ИСПРАВЛЕНО: Стильная лавандовая полоса прогресса с градиентом вместо зеленой системной */
+        QProgressBar {
+            border: 2px solid #BB9AF7;
+            border-radius: 10px;
+            background-color: #1E1F22;
+            text-align: center;
+            height: 20px;
+        }
+        QProgressBar::chunk {
+            background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7C3AED, stop:1 #BB9AF7);
+            border-radius: 8px;
+        }
+
+        QPushButton#ClearBtn { 
+            background-color: #3F424A; color: #DFE1E5; border-radius: 12px; 
+            font-family: 'Noto Sans Mono'; font-weight: bold; min-height: 45px; min-width: 180px; border: none; 
+        }
+        QPushButton#ClearBtn:hover { background-color: #4E515B; }
+        QPushButton#SaveBtn { 
+            background-color: #7C3AED; color: white; border-radius: 12px; 
+            font-family: 'Noto Sans Mono'; font-weight: bold; min-height: 45px; min-width: 260px; border: none; 
+        }
+        QPushButton#SaveBtn:hover { background-color: #BB9AF7; }
+        QPushButton#SaveBtn:disabled { background-color: #3F424A; color: #7F7F7F; }
+        QComboBox { background-color: #3F424A; color: white; border: 1px solid #4E515B; border-radius: 6px; padding: 3px 10px; min-width: 140px; }
+
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#SettingsPanel { background-color: #F0F2F5; border-color: #E4E6EB; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QLabel, QMainWindow[styleSheet*="background-color: #FFFFFF"] QCheckBox { color: #1F1F1F; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ImageZoneLeft, QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#ImageZoneRight { background-color: #F0F2F5; border-color: #E4E6EB; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ImageZoneLeft:hover { border-color: #7C3AED; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QTextEdit { background-color: white; color: #1F1F1F; border-color: #E4E6EB; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ClearBtn { background-color: #E4E6EB; color: #1F1F1F; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ClearBtn:hover { background-color: #D8DADF; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QComboBox { background-color: white; color: #1F1F1F; border-color: #E4E6EB; }
         """
         self.setStyleSheet(style_qss)
 
@@ -228,17 +229,27 @@ class IdentifierScreen(QWidget):
                 target_widget.setPixmap(pix)
 
     def load_models_to_selector(self):
-        if os.path.exists(MODELS_DIR):
-            files = [f for f in os.listdir(MODELS_DIR) if f.endswith('.pt')]
-            if files:
-                self.model_selector.addItems(files)
-                return
-        self.model_selector.addItems(["yolo11n.pt", "yolo11m.pt", "yolo11x.pt"])
+        # ИСПРАВЛЕНО: Безопасное создание папки и проверка на физическое наличие файлов .pt
+        if not os.path.exists(MODELS_DIR):
+            os.makedirs(MODELS_DIR, exist_ok=True)
+
+        files = [f for f in os.listdir(MODELS_DIR) if f.endswith('.pt')]
+        if files:
+            self.model_selector.clear()
+            self.model_selector.addItems(files)
+        else:
+            # Если папка пустая, выводим заглушки, но предупреждаем пользователя
+            self.model_selector.clear()
+            self.model_selector.addItems(["yolo11n.pt (Скачайте в Source/Models)", "yolo11m.pt", "yolo11x.pt"])
 
     def change_model(self):
         model_name = self.model_selector.currentText()
-        full_path = os.path.join(MODELS_DIR, model_name) if os.path.exists(MODELS_DIR) else model_name
-        self.engine.set_model(full_path)
+        if "Скачайте" in model_name:
+            model_name = model_name.split(" ")[0]
+        full_path = os.path.join(MODELS_DIR, model_name)
+        # Передаем путь движку, только если файл реально существует на диске
+        if os.path.exists(full_path):
+            self.engine.set_model(full_path)
 
     def update_conf_label(self, value):
         float_val = value / 100.0
@@ -248,13 +259,13 @@ class IdentifierScreen(QWidget):
         if self.is_processing:
             return
 
+        # ИСПРАВЛЕНО: Безопасный захват кортежа из диалогового окна, исключающий сбои путей
         path, _ = QFileDialog.getOpenFileName(self, "Открыть изображение", "", "Images (*.jpg *.jpeg *.png *.webp)")
         if not path:
             return
 
         self.current_path = path
         self.is_processing = True
-
         self.progress_bar.show()
         self.btn_save.setText("ОБРАБОТКА...")
         self.btn_save.setEnabled(False)
@@ -264,7 +275,6 @@ class IdentifierScreen(QWidget):
         only_text = self.mode_checkbox.isChecked()
 
         self.worker = AnalysisWorker(self.engine, path, conf, only_text)
-        # ИСПРАВЛЕНО: Подключаем наш переименованный сигнал
         self.worker.analysis_completed.connect(self.on_analysis_done)
         self.worker.error.connect(self.on_analysis_error)
         self.worker.start()
@@ -273,17 +283,28 @@ class IdentifierScreen(QWidget):
     def on_analysis_done(self, results):
         self.last_results = results
 
-        pix_left = QPixmap(self.current_path).scaled(450, 350, Qt.AspectRatioMode.KeepAspectRatio,
+        # Получаем текущие динамические размеры виджета, чтобы картинка идеально заполнила его
+        w = self.btn_left_image.width()
+        h = self.btn_left_image.height()
+
+        pix_left = QPixmap(self.current_path).scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
                                                      Qt.TransformationMode.SmoothTransformation)
         self.btn_left_image.setIcon(QIcon())
         self.btn_left_image.setEnabled(True)
         self.btn_left_image.setIcon(QIcon(pix_left))
         self.btn_left_image.setIconSize(pix_left.size())
 
+        # ИСПРАВЛЕНО: Безопасная сборка QImage из PIL Image с точным указанием bytesPerLine для предотвращения Win-вылетов
         pil_img = results["result_img"]
         img_data = pil_img.tobytes("raw", "RGB")
-        qimg = QImage(img_data, pil_img.size, pil_img.size, QImage.Format.Format_RGB888)
-        pix_right = QPixmap.fromImage(qimg).scaled(450, 350, Qt.AspectRatioMode.KeepAspectRatio,
+        bytes_per_line = pil_img.width * 3
+
+        qimg = QImage(img_data, pil_img.width, pil_img.height, bytes_per_line, QImage.Format.Format_RGB888)
+
+        w_r = self.panel_right_res.width()
+        h_r = self.panel_right_res.height()
+
+        pix_right = QPixmap.fromImage(qimg).scaled(w_r, h_r, Qt.AspectRatioMode.KeepAspectRatio,
                                                    Qt.TransformationMode.SmoothTransformation)
         self.lbl_right_image.setPixmap(pix_right)
 
@@ -314,7 +335,8 @@ class IdentifierScreen(QWidget):
     def open_object_editor(self):
         if not self.last_results:
             return
-        dialog = ObjectEditorDialog(self.current_path, self.last_results, self.notes_box.toPlainText().strip(),
+        dialog = ObjectEditorDialog(self.current_path, self.last_results,
+                                    self.notes_box.toPlainText().strip(),
                                     self.main_window, self)
         if dialog.exec():
             self.btn_save.setText("СОХРАНЕНО В БД")
