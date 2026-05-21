@@ -1,12 +1,14 @@
 import os
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFrame, QLabel,
                              QSlider, QComboBox, QCheckBox, QPushButton,
-                             QTextEdit, QProgressBar, QFileDialog, QMessageBox, QSizePolicy)
+                             QTextEdit, QProgressBar, QFileDialog, QMessageBox,
+                             QSizePolicy)
 from PyQt6.QtGui import QFont, QPixmap, QImage, QIcon
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from App.CFG.config import ICONS, MODELS_DIR
 from App.Engine.vision_engine import VisionEngine
 from App.UI.components.object_editor import ObjectEditorDialog
+from App.UI.components.yolo_installer_dialog import YoloInstallerDialog  # Импортируем наше новое окно
 
 
 # === РАБОЧИЙ ПОТОК ДЛЯ ИИ-АНАЛИЗА ===
@@ -45,6 +47,7 @@ class IdentifierScreen(QWidget):
 
         # Объявление всех атрибутов в __init__
         self.model_selector = None
+        self.btn_install_models = None  # Кнопка для вызова установщика
         self.mode_checkbox = None
         self.conf_slider = None
         self.conf_val_label = None
@@ -74,10 +77,19 @@ class IdentifierScreen(QWidget):
 
         lbl_model = QLabel("Модель:")
         lbl_model.setFont(QFont("Noto Sans Mono", 11, QFont.Weight.Bold))
+
         self.model_selector = QComboBox()
         self.model_selector.currentIndexChanged.connect(self.change_model)
+
+        # Наша новая кнопка установщика моделей YOLO
+        self.btn_install_models = QPushButton("⚙️ Менеджер моделей")
+        self.btn_install_models.setObjectName("InstallModelsBtn")
+        self.btn_install_models.clicked.connect(self.open_model_installer)
+        self.btn_install_models.setCursor(Qt.CursorShape.PointingHandCursor)
+
         settings_layout.addWidget(lbl_model)
         settings_layout.addWidget(self.model_selector)
+        settings_layout.addWidget(self.btn_install_models)  # Добавляем на панель настроек
 
         self.mode_checkbox = QCheckBox("Только Текст")
         self.mode_checkbox.setFont(QFont("Noto Sans Mono", 11, QFont.Weight.Bold))
@@ -85,6 +97,7 @@ class IdentifierScreen(QWidget):
 
         lbl_conf = QLabel("Точность (Conf):")
         lbl_conf.setFont(QFont("Noto Sans Mono", 11, QFont.Weight.Bold))
+
         self.conf_slider = QSlider(Qt.Orientation.Horizontal)
         self.conf_slider.setMinimum(10)
         self.conf_slider.setMaximum(100)
@@ -99,6 +112,7 @@ class IdentifierScreen(QWidget):
         settings_layout.addWidget(lbl_conf)
         settings_layout.addWidget(self.conf_slider)
         settings_layout.addWidget(self.conf_val_label)
+
         main_layout.addWidget(settings_panel)
 
         # 2. ЦЕНТРАЛЬНЫЙ БЛОК (ЛЕВАЯ И ПРАВАЯ ЗОНЫ)
@@ -107,7 +121,6 @@ class IdentifierScreen(QWidget):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(20)
 
-        # ИСПРАВЛЕНО: Заданы жесткие минимальные размеры и политика растяжения, чтобы панель не плющилась
         self.btn_left_image = QPushButton()
         self.btn_left_image.setObjectName("ImageZoneLeft")
         self.btn_left_image.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -129,11 +142,11 @@ class IdentifierScreen(QWidget):
         self.lbl_right_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.set_placeholder_icon(self.lbl_right_image, "vision")
         right_layout.addWidget(self.lbl_right_image)
-        content_layout.addWidget(self.panel_right_res, 1)
 
+        content_layout.addWidget(self.panel_right_res, 1)
         main_layout.addWidget(content_box, 1)
 
-        # 3. ПРОГРЕСС-БАР (ИСПРАВЛЕНЫ СТИЛИ И ВНЕШНИЙ ВИД ДАЛЬШЕ В МЕТОДЕ)
+        # 3. ПРОГРЕСС-БАР
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)
         self.progress_bar.setTextVisible(False)
@@ -180,7 +193,6 @@ class IdentifierScreen(QWidget):
         QPushButton#ImageZoneLeft:hover { border-color: #BB9AF7; }
         QTextEdit { background-color: #2B2D31; color: white; border: 1px solid #3F424A; border-radius: 10px; padding: 5px; }
 
-        /* ИСПРАВЛЕНО: Стильная лавандовая полоса прогресса с градиентом вместо зеленой системной */
         QProgressBar {
             border: 2px solid #BB9AF7;
             border-radius: 10px;
@@ -192,28 +204,38 @@ class IdentifierScreen(QWidget):
             background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7C3AED, stop:1 #BB9AF7);
             border-radius: 8px;
         }
-
         QPushButton#ClearBtn { 
             background-color: #3F424A; color: #DFE1E5; border-radius: 12px; 
             font-family: 'Noto Sans Mono'; font-weight: bold; min-height: 45px; min-width: 180px; border: none; 
         }
         QPushButton#ClearBtn:hover { background-color: #4E515B; }
+
         QPushButton#SaveBtn { 
             background-color: #7C3AED; color: white; border-radius: 12px; 
             font-family: 'Noto Sans Mono'; font-weight: bold; min-height: 45px; min-width: 260px; border: none; 
         }
         QPushButton#SaveBtn:hover { background-color: #BB9AF7; }
         QPushButton#SaveBtn:disabled { background-color: #3F424A; color: #7F7F7F; }
+
+        /* Кнопка вызова менеджера моделей */
+        QPushButton#InstallModelsBtn {
+            background-color: #3F424A; color: white; border: 1px solid #4E515B; border-radius: 6px; padding: 3px 10px;
+        }
+        QPushButton#InstallModelsBtn:hover { background-color: #4E515B; border-color: #BB9AF7; }
+
         QComboBox { background-color: #3F424A; color: white; border: 1px solid #4E515B; border-radius: 6px; padding: 3px 10px; min-width: 140px; }
 
         QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#SettingsPanel { background-color: #F0F2F5; border-color: #E4E6EB; }
-        QMainWindow[styleSheet*="background-color: #FFFFFF"] QLabel, QMainWindow[styleSheet*="background-color: #FFFFFF"] QCheckBox { color: #1F1F1F; }
-        QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ImageZoneLeft, QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#ImageZoneRight { background-color: #F0F2F5; border-color: #E4E6EB; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QLabel, 
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QCheckBox { color: #1F1F1F; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ImageZoneLeft, 
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QFrame#ImageZoneRight { background-color: #F0F2F5; border-color: #E4E6EB; }
         QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ImageZoneLeft:hover { border-color: #7C3AED; }
         QMainWindow[styleSheet*="background-color: #FFFFFF"] QTextEdit { background-color: white; color: #1F1F1F; border-color: #E4E6EB; }
         QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ClearBtn { background-color: #E4E6EB; color: #1F1F1F; }
         QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#ClearBtn:hover { background-color: #D8DADF; }
         QMainWindow[styleSheet*="background-color: #FFFFFF"] QComboBox { background-color: white; color: #1F1F1F; border-color: #E4E6EB; }
+        QMainWindow[styleSheet*="background-color: #FFFFFF"] QPushButton#InstallModelsBtn { background-color: #E4E6EB; color: #1F1F1F; border-color: #D8DADF; }
         """
         self.setStyleSheet(style_qss)
 
@@ -229,27 +251,52 @@ class IdentifierScreen(QWidget):
                 target_widget.setPixmap(pix)
 
     def load_models_to_selector(self):
-        # ИСПРАВЛЕНО: Безопасное создание папки и проверка на физическое наличие файлов .pt
-        if not os.path.exists(MODELS_DIR):
-            os.makedirs(MODELS_DIR, exist_ok=True)
+        """
+        Сканирует локальную папку Source/Models и динамически
+        наполняет выпадающий список выбора ИИ-моделей.
+        """
+        # Импортируем наш бритвенно-точный путь из config.py
+        from App.CFG.config import MODELS_DIR
+        target_dir = MODELS_DIR
 
-        files = [f for f in os.listdir(MODELS_DIR) if f.endswith('.pt')]
+        if not os.path.exists(target_dir):
+            os.makedirs(target_dir, exist_ok=True)
+
+        # Считываем файлы весов с диска
+        files = [f for f in os.listdir(target_dir) if f.endswith(('.pt', '.onnx'))]
+
+        # Блокируем сигналы, чтобы избежать ложных срабатываний детектора во время обновления списка
+        self.model_selector.blockSignals(True)
+        self.model_selector.clear()
+
         if files:
-            self.model_selector.clear()
+            # Сортируем список файлов по алфавиту (n -> s -> m -> x) для красоты
+            files.sort()
             self.model_selector.addItems(files)
+            print(f"[UI Selector] Успешно подгружено моделей с диска: {len(files)}")
         else:
-            # Если папка пустая, выводим заглушки, но предупреждаем пользователя
-            self.model_selector.clear()
-            self.model_selector.addItems(["yolo11n.pt (Скачайте в Source/Models)", "yolo11m.pt", "yolo11x.pt"])
+            # Если папка пустая, выводим стандартный перечень-подсказку
+            self.model_selector.addItems(["yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11x.pt"])
+            print("[UI Selector Warning] Папка моделей пуста. Выведены дефолтные пресеты.")
+
+        self.model_selector.blockSignals(False)
+
+        # Принудительно заставляем бэкенд инициализировать модель, которая сейчас активна в списке
+        self.change_model()
 
     def change_model(self):
+        """Передает чистый текст имени файла в бэкенд оркестратора."""
         model_name = self.model_selector.currentText()
-        if "Скачайте" in model_name:
-            model_name = model_name.split(" ")[0]
-        full_path = os.path.join(MODELS_DIR, model_name)
-        # Передаем путь движку, только если файл реально существует на диске
-        if os.path.exists(full_path):
-            self.engine.set_model(full_path)
+        if model_name:
+            # Передаем только имя файла, наш обновленный бэкенд ObjectDetector сам соберет путь!
+            self.engine.set_model(model_name)
+
+    def open_model_installer(self):
+        """Открывает диалоговое окно установщика моделей и обновляет селектор при закрытии."""
+        dialog = YoloInstallerDialog(self)
+        dialog.exec()
+        # Когда окно закрылось (пользователь скачал новые ёлки) — перечитываем папку!
+        self.load_models_to_selector()
 
     def update_conf_label(self, value):
         float_val = value / 100.0
@@ -258,12 +305,9 @@ class IdentifierScreen(QWidget):
     def process_image(self):
         if self.is_processing:
             return
-
-        # ИСПРАВЛЕНО: Безопасный захват кортежа из диалогового окна, исключающий сбои путей
         path, _ = QFileDialog.getOpenFileName(self, "Открыть изображение", "", "Images (*.jpg *.jpeg *.png *.webp)")
         if not path:
             return
-
         self.current_path = path
         self.is_processing = True
         self.progress_bar.show()
@@ -282,11 +326,8 @@ class IdentifierScreen(QWidget):
     @pyqtSlot(dict)
     def on_analysis_done(self, results):
         self.last_results = results
-
-        # Получаем текущие динамические размеры виджета, чтобы картинка идеально заполнила его
         w = self.btn_left_image.width()
         h = self.btn_left_image.height()
-
         pix_left = QPixmap(self.current_path).scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
                                                      Qt.TransformationMode.SmoothTransformation)
         self.btn_left_image.setIcon(QIcon())
@@ -294,16 +335,13 @@ class IdentifierScreen(QWidget):
         self.btn_left_image.setIcon(QIcon(pix_left))
         self.btn_left_image.setIconSize(pix_left.size())
 
-        # ИСПРАВЛЕНО: Безопасная сборка QImage из PIL Image с точным указанием bytesPerLine для предотвращения Win-вылетов
         pil_img = results["result_img"]
         img_data = pil_img.tobytes("raw", "RGB")
         bytes_per_line = pil_img.width * 3
-
         qimg = QImage(img_data, pil_img.width, pil_img.height, bytes_per_line, QImage.Format.Format_RGB888)
 
         w_r = self.panel_right_res.width()
         h_r = self.panel_right_res.height()
-
         pix_right = QPixmap.fromImage(qimg).scaled(w_r, h_r, Qt.AspectRatioMode.KeepAspectRatio,
                                                    Qt.TransformationMode.SmoothTransformation)
         self.lbl_right_image.setPixmap(pix_right)

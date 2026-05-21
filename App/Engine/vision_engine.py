@@ -11,8 +11,13 @@ class VisionEngine:
         self.detector = ObjectDetector(model_name)
         self.recognizer = TextRecognizer()
 
-    def set_model(self, model_name: str):
-        self.detector.set_model(model_name)
+    def set_model(self, model_name):
+        """Проброс команды смены модели из UI оркестратора в конкретный детектор"""
+        if hasattr(self, 'detector') and self.detector is not None:
+            self.detector.set_model(model_name)
+        elif hasattr(self, 'model'):
+            # На случай, если в старой версии объект лежал прямо в self.model
+            self.detector.set_model(model_name)
 
     def analyze(self, image_path: str, conf_threshold: float, only_text: bool = False) -> dict:
         """Оркестрирует процесс комплексного анализа изображений."""

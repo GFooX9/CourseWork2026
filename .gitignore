@@ -12,6 +12,11 @@ dist/
 # Настройки среды разработки PyCharm
 .idea/
 
-# Игнорируем тяжелые веса нейросетей
-Source/Models/*.pt
-Source/Models/*.onnx
+# КРИТИЧЕСКИЙ ФИКС ПУТИ: Игнорируем тяжелые веса нейросетей внутри папки App
+App/Source/Models/*.pt
+App/Source/Models/*.onnx
+
+# Также пропишем игнорирование локальной базы данных и отчетов, чтобы не забивать репозиторий мусором
+App/Data/Basedata/*.db
+App/Data/history.json
+Results/
