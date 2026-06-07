@@ -2,6 +2,7 @@ import os
 import sys
 import ctypes
 
+
 def resource_path(relative_path):
     """
     Определяет абсолютный путь к ресурсам.
@@ -9,6 +10,7 @@ def resource_path(relative_path):
     """
     base_path = getattr(sys, '_MEIPASS', os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     return os.path.normpath(os.path.join(base_path, relative_path))
+
 
 # --- ПУТИ К КОРНЕВЫМ ДИРЕКТОРИЯМ ---
 # Базовая директория самого приложения App
