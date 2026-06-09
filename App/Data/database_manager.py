@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from App.CFG.config import DB_PATH
 
+
 class DatabaseManager:
     def __init__(self):
         # Используем централизованный путь к БД из конфигурационного файла
